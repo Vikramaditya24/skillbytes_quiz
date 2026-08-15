@@ -12,6 +12,7 @@ export default function QuizPage() {
   const [feedback, setFeedback] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [history, setHistory] = useState({}); // { [questionNumber]: boolean }
 
   const loadQuestion = () => {
     setError(""); setSelected(null); setFeedback(null);
@@ -30,46 +31,90 @@ export default function QuizPage() {
     try {
       const resp = await api.submitAnswer(sessionId, user.id, current.question.id, selected);
       setFeedback({ isCorrect: resp.is_correct, correctKey: resp.correct_option_key, sessionStatus: resp.session_status });
+      setHistory((h) => ({ ...h, [current.question_number]: resp.is_correct }));
     } catch (e) { setError(e.message); } finally { setSubmitting(false); }
   };
 
-  if (error) return <div><p className="error">{error}</p><button className="btn secondary" onClick={() => navigate("/progress")}>Back to My Progress</button></div>;
-  if (!current) return <p className="muted">Loading question…</p>;
-
-  const pct = Math.round((current.question_number / current.total_questions) * 100);
-
-  return (
-    <div style={{ maxWidth: 820, margin: "0 auto" }}>
-      <div className="quiz-meta">
-        <span>Quiz in progress</span>
-        <strong style={{ color: "var(--text)" }}>Question {current.question_number} of {current.total_questions}</strong>
-      </div>
-      <div className="progress-bar"><div className="progress-fill" style={{ width: `${pct}%` }} /></div>
-      <div className="card" style={{ padding: "28px 30px" }}>
-        <div className="small-note">Choose one answer · previous questions cannot be revisited</div>
-        <h2 className="quiz-question">{current.question.text}</h2>
-        {current.question.options.map((opt) => {
-          let cls = "option";
-          if (feedback) {
-            if (opt.key === feedback.correctKey) cls += " correct";
-            else if (opt.key === selected) cls += " incorrect";
-          } else if (opt.key === selected) cls += " selected";
-          return <button key={opt.key} className={cls} disabled={!!feedback || submitting} onClick={() => setSelected(opt.key)}>
-            <strong>{opt.key}</strong>&nbsp;&nbsp;{opt.text}
-          </button>;
-        })}
-        {feedback && (
-          <div className={feedback.isCorrect ? "callout" : "error"} style={{ marginTop: 14 }}>
-            {feedback.isCorrect ? "Correct answer." : "Not quite. The correct answer is highlighted."}
-          </div>
-        )}
-        <div className="answer-actions">
-          <button className="btn" disabled={(!feedback && !selected) || submitting} onClick={handleNext}>
-            {feedback ? (feedback.sessionStatus === "completed" ? "View result" : "Next question") : (submitting ? "Submitting…" : "Submit answer")}
-          </button>
+  if (error) {
+    return (
+      <div className="quiz-shell">
+        <div className="state-card">
+          <div className="state-icon danger">!</div>
+          <h3>Something went wrong</h3>
+          <p>{error}</p>
+          <button className="btn secondary" onClick={() => navigate("/progress")}>Back to My Progress</button>
         </div>
       </div>
-      <p className="small-note" style={{ textAlign: "center" }}>Your answer and response duration are recorded server-side as a quiz attempt event.</p>
+    );
+  }
+
+  if (!current) {
+    return (
+      <div className="quiz-shell">
+        <div className="card quiz-card">
+          <div className="quiz-skeleton-line" style={{ width: 140, height: 12, marginBottom: 20 }} />
+          <div className="quiz-skeleton-line" style={{ width: "90%", height: 26, marginBottom: 10 }} />
+          <div className="quiz-skeleton-line" style={{ width: "60%", height: 26, marginBottom: 26 }} />
+          <div className="quiz-skeleton-line" style={{ height: 50, marginBottom: 10, borderRadius: 14 }} />
+          <div className="quiz-skeleton-line" style={{ height: 50, marginBottom: 10, borderRadius: 14 }} />
+          <div className="quiz-skeleton-line" style={{ height: 50, marginBottom: 10, borderRadius: 14 }} />
+          <div className="quiz-skeleton-line" style={{ height: 50, borderRadius: 14 }} />
+        </div>
+      </div>
+    );
+  }
+
+  const total = current.total_questions;
+
+  return (
+    <div className="quiz-shell">
+      <div className="quiz-meta">
+        <span>Quiz in progress</span>
+        <strong style={{ color: "var(--ink)" }}>Question {current.question_number} of {total}</strong>
+      </div>
+
+      <div className="quiz-trail">
+        {Array.from({ length: total }, (_, i) => {
+          const qNum = i + 1;
+          let cls = "trail-node";
+          if (qNum === current.question_number) cls += " current";
+          else if (history[qNum] === true) cls += " done-correct";
+          else if (history[qNum] === false) cls += " done-incorrect";
+          return <span key={qNum} className={cls} />;
+        })}
+      </div>
+
+      <div className="card quiz-card">
+        <div className="quiz-card-inner" key={current.question.id}>
+          <div className="small-note">Choose one answer · previous questions cannot be revisited</div>
+          <h2 className="quiz-question">{current.question.text}</h2>
+          {current.question.options.map((opt) => {
+            let cls = "option";
+            if (feedback) {
+              if (opt.key === feedback.correctKey) cls += " correct";
+              else if (opt.key === selected) cls += " incorrect";
+            } else if (opt.key === selected) cls += " selected";
+            return (
+              <button key={opt.key} className={cls} disabled={!!feedback || submitting} onClick={() => setSelected(opt.key)}>
+                <strong>{opt.key}</strong>&nbsp;&nbsp;{opt.text}
+              </button>
+            );
+          })}
+          {feedback && (
+            <div className={`quiz-feedback ${feedback.isCorrect ? "correct" : "incorrect"}`}>
+              {feedback.isCorrect ? "✓✓ Correct answer." : "✕ Not quite — the correct answer is highlighted."}
+            </div>
+          )}
+          <div className="answer-actions">
+            <button className="btn" disabled={(!feedback && !selected) || submitting} onClick={handleNext}>
+              {feedback ? (feedback.sessionStatus === "completed" ? "View result" : "Next question") : (submitting ? "Submitting…" : "Submit answer")}
+            </button>
+          </div>
+        </div>
+      </div>
+      <p className="small-note" style={{ textAlign: "center", marginTop: 14 }}>
+        Your answer and response duration are recorded server-side as a quiz attempt event.
+      </p>
     </div>
   );
 }

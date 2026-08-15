@@ -11,9 +11,11 @@ analytics collection").
 
 def learning_velocity_pipeline(user_id: str | None = None) -> list[dict]:
     """
-    Group by user_id. Per user: attempt count, correct count, avg/std/min/max
-    response time. Min/max/std computed in Mongo ($stdDevPop) rather than
-    pulled into Python, per the "no application-side full-table pulls" rule.
+    Group by user_id. Per user: attempt count, correct count, avg/min/max
+    response time, plus sum-of-squares of response time (used by the service
+    layer to derive population stddev via Var(X) = E[X^2] - E[X]^2, since
+    mongomock - used in tests - does not implement MongoDB's native
+    $stdDevPop group accumulator).
 
     When `user_id` is given, a $match is prepended so the exact same pipeline
     powers both the cohort-wide ranking and a single learner's "My Progress"

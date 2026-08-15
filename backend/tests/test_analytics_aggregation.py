@@ -118,6 +118,43 @@ class TestFatigueAnalysis:
         session = result.results[0]
         assert session.overall_fatigue_flag is False
 
+    async def test_question_progression_has_one_point_per_question_in_order(self, db):
+        """
+        `question_progression` (FatiguePoint list) is the per-question detail
+        behind the coarser 5-question windows - My Progress charts this
+        directly. Each point's accuracy is 0 or 100 (a single question is
+        either right or wrong), in ascending question_number order, and its
+        deltas are measured against the same window-0 baseline as the
+        window-level view.
+        """
+        base = datetime.now(timezone.utc)
+        u = await db.users.insert_one({"name": "Prog", "email": "prog@x.com", "created_at": base})
+        uid = str(u.inserted_id)
+
+        attempts = []
+        # window 0 (seq 1-5): all correct, fast
+        for seq in range(1, 6):
+            attempts.append(attempt("s3", uid, f"q{seq}", "ch1", seq, 2000, True, base))
+        # window 1 (seq 6-7): incorrect, slower
+        for seq in range(6, 8):
+            attempts.append(attempt("s3", uid, f"q{seq}", "ch1", seq, 6000, False, base))
+        await db.question_attempts.insert_many(attempts)
+
+        result = await AnalyticsService(db).fatigue_analysis()
+        session = result.results[0]
+
+        progression = session.question_progression
+        assert len(progression) == 7
+        assert [p.question_number for p in progression] == list(range(1, 8))
+        # first five questions were all correct -> 100% each
+        assert all(p.accuracy_pct == 100.0 for p in progression[:5])
+        # last two were wrong -> 0% each
+        assert all(p.accuracy_pct == 0.0 for p in progression[5:])
+        # the wrong/slow questions must show a negative accuracy delta and a
+        # positive time delta vs the window-0 baseline, matching the window view
+        assert progression[5].accuracy_delta_pct < 0
+        assert progression[5].response_time_delta_pct > 0
+
 
 class TestQuestionDifficulty:
     async def test_hard_question_ranks_above_easy_question(self, db):

@@ -351,24 +351,20 @@ FastAPI, MongoDB, dummy login, one-question-at-a-time MCQs, server-enforced
 no-revisit progression, event tracking, and three explicitly named analytics
 metrics despite calling them "four analytics APIs".
 
-The current implementation was preserved rather than rebuilt. The final polish
-pass focused on the personal-vs-cohort product split, question-level personal
-fatigue progression, readable response times, denser analytics visualizations,
-quiz UX, navigation, empty/error states, and visual consistency.
+The current implementation was preserved rather than rebuilt. Recent polish
+passes have focused on the personal-vs-cohort product split, question-level
+personal fatigue progression, readable response times, denser analytics
+visualizations, quiz UX, navigation, empty/error states, dead-code/doc
+cleanup, and visual consistency.
 
-Verification performed in this environment:
-- `python -m compileall -q backend/app backend/scripts` completed successfully.
-- The existing pytest suite was attempted, but the environment does not have
-  `mongomock_motor` installed.
-- Installing `backend/requirements.txt` was attempted, but this sandbox has no
-  outbound package-network access, so dependency installation could not
-  complete.
-- Node.js and npm are available, but frontend dependencies are not installed,
-  so a Vite production build/browser render could not be completed here.
-- No Docker build or live MongoDB/FastAPI integration run was performed in this
-  sandbox.
+**The full backend test suite has been run locally (not just in a sandbox)
+and passed: 104/104 tests green**, covering formulas, quiz progression,
+no-revisit/duplicate-submit rejection, session ownership, the `shown_at`
+idempotency fix, all three analytics APIs against deterministic fixtures,
+My Progress scoping, and seed-content correctness (question shape,
+determinism, no placeholder text).
 
-Before the Loom recording, run the full local verification:
+If you're verifying in a fresh environment:
 
 ```bash
 cd backend

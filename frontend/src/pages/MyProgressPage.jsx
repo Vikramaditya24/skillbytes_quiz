@@ -30,8 +30,27 @@ export default function MyProgressPage() {
     api.myProgress(user.id).then(setData).catch((e) => setError(e.message));
   }, [user.id]);
 
-  if (error) return <p className="error">{error}</p>;
-  if (!data) return <p className="muted">Loading your progress…</p>;
+  if (error) {
+    return (
+      <div className="state-card">
+        <div className="state-icon danger">!</div>
+        <h3>Couldn't load your progress</h3>
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div>
+        <div className="page-header"><h1>Welcome back</h1></div>
+        <div className="kpi-grid">
+          <div className="skeleton-kpi" /><div className="skeleton-kpi" /><div className="skeleton-kpi" /><div className="skeleton-kpi" />
+        </div>
+        <div className="skeleton-chart" />
+      </div>
+    );
+  }
 
   if (!data.has_data) {
     return (
@@ -40,9 +59,10 @@ export default function MyProgressPage() {
           <h1>Welcome, {user.name.split(" ")[0]}</h1>
           <p className="muted">Your learner dashboard will build as you complete quizzes.</p>
         </div>
-        <div className="card empty">
+        <div className="state-card">
+          <div className="state-icon neutral">—</div>
           <h3>No completed quizzes yet</h3>
-          <p className="muted">Complete your first quiz to start building your performance history and see how your accuracy and response time change during an attempt.</p>
+          <p>Complete your first quiz to start building your performance history and see how your accuracy and response time change during an attempt.</p>
           <button className="btn" onClick={() => navigate("/exams")}>Start your first quiz</button>
         </div>
       </div>
@@ -98,22 +118,23 @@ export default function MyProgressPage() {
         <div className="card chart-card">
           <ResponsiveContainer width="100%" height={320}>
             <LineChart data={chartData} margin={{ top: 10, right: 14, left: -8, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#263241" />
-              <XAxis dataKey="question" tick={{ fontSize: 11, fill: "#9aa7b5" }} />
-              <YAxis yAxisId="accuracy" domain={[0, 100]} tick={{ fontSize: 11, fill: "#9aa7b5" }} unit="%" />
-              <YAxis yAxisId="time" orientation="right" tick={{ fontSize: 11, fill: "#9aa7b5" }} unit="s" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#262c37" />
+              <XAxis dataKey="question" tick={{ fontSize: 11, fill: "#8b93a3" }} />
+              <YAxis yAxisId="accuracy" domain={[0, 100]} tick={{ fontSize: 11, fill: "#8b93a3" }} unit="%" />
+              <YAxis yAxisId="time" orientation="right" tick={{ fontSize: 11, fill: "#8b93a3" }} unit="s" />
               <Tooltip
                 formatter={(value, name) => [name === "Response time" ? `${value} s` : `${value}%`, name]}
-                contentStyle={{ background: "#111720", border: "1px solid #263241", borderRadius: 7 }}
+                contentStyle={{ background: "#1c212b", border: "1px solid #262c37", borderRadius: 10 }}
+                labelStyle={{ color: "#f2f4f8" }}
               />
-              <Line yAxisId="accuracy" type="monotone" dataKey="Accuracy" stroke="#5bd6a1" strokeWidth={2} dot={{ r: 3 }} />
-              <Line yAxisId="time" type="monotone" dataKey="Response time" stroke="#7aa2ff" strokeWidth={2} dot={{ r: 2 }} />
+              <Line yAxisId="accuracy" type="monotone" dataKey="Accuracy" stroke="#4ade80" strokeWidth={2} dot={{ r: 3 }} />
+              <Line yAxisId="time" type="monotone" dataKey="Response time" stroke="#e8b04b" strokeWidth={2} dot={{ r: 2 }} />
             </LineChart>
           </ResponsiveContainer>
           <div className="small-note">Accuracy is shown as a percentage; response time uses seconds for readability. The fatigue heuristic remains a descriptive signal, not a diagnosis.</div>
         </div>
       ) : (
-        <div className="card empty"><h3>Not enough progression data</h3><p className="muted">Complete a quiz with recorded question attempts to see performance through the attempt.</p></div>
+        <div className="state-card"><h3>Not enough progression data</h3><p>Complete a quiz with recorded question attempts to see performance through the attempt.</p></div>
       )}
 
       <div className="section-heading">
