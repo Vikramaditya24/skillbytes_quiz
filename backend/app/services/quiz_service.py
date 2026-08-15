@@ -14,9 +14,17 @@ from app.schemas.quiz import (
     SubmitAnswerResponse,
 )
 
-
+def _as_utc(value: datetime) -> datetime:
+    """Normalize Mongo/mock-Mongo reads to timezone-aware UTC."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 class QuizProgressionError(Exception):
     """Raised on out-of-order question access or answering a completed session."""
+
+
+class OwnershipError(Exception):
+    """Raised when the requesting user does not own the target quiz session."""
 
 
 class QuizService:
@@ -54,10 +62,14 @@ class QuizService:
         created = await self.quiz_repo.create_session(doc)
         return QuizSessionOut(**created)
 
-    async def get_current_question(self, session_id: str) -> CurrentQuestionOut:
+    async def get_current_question(self, session_id: str, requesting_user_id: str) -> CurrentQuestionOut:
         session = await self.quiz_repo.get_session(session_id)
         if session is None:
             raise ValueError(f"session {session_id} not found")
+        if session["user_id"] != requesting_user_id:
+            # Session ownership: a user must not be able to view another
+            # learner's in-progress question by guessing/incrementing an id.
+            raise OwnershipError("this quiz session does not belong to the requesting user")
         if session["status"] == "completed":
             raise QuizProgressionError("this quiz session is already completed")
 
@@ -66,11 +78,20 @@ class QuizService:
         questions_by_id = await self.catalog.get_questions_by_ids([question_id])
         q = questions_by_id[question_id]
 
-        # Stamp shown_at server-side NOW, on the attempt-in-progress record.
-        # We store it on the session so submit_answer can read it back -
-        # tamper-resistant per Milestone 0 decision B4 (client can't fabricate it).
+        # Stamp shown_at server-side, but ONLY the first time this question is
+        # served. $setOnInsert-style idempotency via a conditional filter: the
+        # update only applies if shown_at_by_index.{idx} does not already
+        # exist, so repeated calls (page refresh, retried request, React
+        # double-render) never reset the clock that response_duration_ms is
+        # measured against. Concurrency-safe: two simultaneous first-calls
+        # both attempt the same conditional update, but only the update whose
+        # filter still matches (field still absent) takes effect - Mongo
+        # serializes the two writes to the same document.
         await self.db.quiz_sessions.update_one(
-            {"_id": ObjectId(session_id)},
+            {
+                "_id": ObjectId(session_id),
+                f"shown_at_by_index.{idx}": {"$exists": False},
+            },
             {"$set": {f"shown_at_by_index.{idx}": datetime.now(timezone.utc)}},
         )
 
@@ -86,11 +107,13 @@ class QuizService:
         )
 
     async def submit_answer(
-        self, session_id: str, question_id: str, selected_option_key: str
+        self, session_id: str, requesting_user_id: str, question_id: str, selected_option_key: str
     ) -> SubmitAnswerResponse:
         session = await self.quiz_repo.get_session(session_id)
         if session is None:
             raise ValueError(f"session {session_id} not found")
+        if session["user_id"] != requesting_user_id:
+            raise OwnershipError("this quiz session does not belong to the requesting user")
         if session["status"] == "completed":
             raise QuizProgressionError("this quiz session is already completed")
 
@@ -111,9 +134,10 @@ class QuizService:
         is_correct = selected_option_key == question["correct_option_key"]
 
         shown_at = session.get("shown_at_by_index", {}).get(str(idx)) or session["started_at"]
+        shown_at = _as_utc(shown_at)
+
         answered_at = datetime.now(timezone.utc)
         duration_ms = int((answered_at - shown_at).total_seconds() * 1000)
-
         attempt_doc = {
             "session_id": session_id,
             "user_id": session["user_id"],
@@ -159,10 +183,12 @@ class QuizService:
             next_question_number=next_number,
         )
 
-    async def get_result(self, session_id: str) -> QuizResultOut:
+    async def get_result(self, session_id: str, requesting_user_id: str) -> QuizResultOut:
         session = await self.quiz_repo.get_session(session_id)
         if session is None:
             raise ValueError(f"session {session_id} not found")
+        if session["user_id"] != requesting_user_id:
+            raise OwnershipError("this quiz session does not belong to the requesting user")
         if session["status"] != "completed":
             raise QuizProgressionError("quiz is not yet completed")
 

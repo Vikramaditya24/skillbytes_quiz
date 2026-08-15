@@ -26,7 +26,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ user_id: userId }),
     }),
-  currentQuestion: (sessionId) => request(`/quiz-sessions/${sessionId}/current-question`),
+  currentQuestion: (sessionId, userId) =>
+    request(`/quiz-sessions/${sessionId}/current-question?user_id=${encodeURIComponent(userId)}`),
   submitAnswer: (sessionId, userId, questionId, selectedOptionKey) =>
     request(`/quiz-sessions/${sessionId}/answer`, {
       method: "POST",
@@ -36,9 +37,11 @@ export const api = {
         selected_option_key: selectedOptionKey,
       }),
     }),
-  getResult: (sessionId) => request(`/quiz-sessions/${sessionId}/result`),
+  getResult: (sessionId, userId) =>
+    request(`/quiz-sessions/${sessionId}/result?user_id=${encodeURIComponent(userId)}`),
 
   learningVelocity: () => request("/analytics/learning-velocity"),
   fatigue: () => request("/analytics/fatigue"),
   questionDifficulty: () => request("/analytics/question-difficulty"),
+  myProgress: (userId) => request(`/analytics/my-progress/${userId}`),
 };

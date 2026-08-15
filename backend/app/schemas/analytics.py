@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class LearningVelocityEntry(BaseModel):
@@ -30,11 +32,20 @@ class FatigueWindow(BaseModel):
     fatigue_flag: bool
 
 
+class FatiguePoint(BaseModel):
+    question_number: int
+    accuracy_pct: float
+    avg_response_time_ms: float
+    accuracy_delta_pct: float
+    response_time_delta_pct: float
+
+
 class FatigueSessionEntry(BaseModel):
     session_id: str
     user_id: str
     user_name: str
     windows: list[FatigueWindow]
+    question_progression: list[FatiguePoint] = Field(default_factory=list)
     overall_fatigue_flag: bool
 
 
@@ -58,3 +69,25 @@ class DifficultyEntry(BaseModel):
 class DifficultyResponse(BaseModel):
     weights: dict[str, float]
     results: list[DifficultyEntry]
+
+
+class RecentSessionSummary(BaseModel):
+    session_id: str
+    chapter_name: str
+    score: int
+    total_questions: int
+    accuracy_pct: float
+    completed_at: datetime | None
+
+
+class PersonalProgressResponse(BaseModel):
+    """
+    "My Progress" - the logged-in learner's own numbers only. has_data=False
+    means this user has no completed attempts yet (new/unused seed user) -
+    the frontend renders an empty state rather than a broken chart.
+    """
+
+    has_data: bool
+    learning_velocity: LearningVelocityEntry | None
+    recent_sessions: list[RecentSessionSummary]
+    latest_session_fatigue: FatigueSessionEntry | None

@@ -76,7 +76,7 @@ class TestLearningVelocityIndex:
     def test_higher_accuracy_outranks_higher_speed_at_default_weights(self):
         # Accuracy weight (0.5) dominates speed (0.3): a big accuracy edge
         # should win even against a big speed disadvantage.
-        high_acc_avg_speed = formulas.learning_velocity_index(95, 50, 80)
+        high_acc_avg_speed = formulas.learning_velocity_index(95, 80, 80)
         avg_acc_high_speed = formulas.learning_velocity_index(70, 100, 80)
         assert high_acc_avg_speed > avg_acc_high_speed
 

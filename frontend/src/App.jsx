@@ -1,12 +1,13 @@
 import { Routes, Route, Navigate, Link, useLocation, useNavigate } from "react-router-dom";
 import { createContext, useContext, useState } from "react";
 import LoginPage from "./pages/LoginPage.jsx";
+import MyProgressPage from "./pages/MyProgressPage.jsx";
 import ExamsPage from "./pages/ExamsPage.jsx";
 import SubjectsPage from "./pages/SubjectsPage.jsx";
 import ChaptersPage from "./pages/ChaptersPage.jsx";
 import QuizPage from "./pages/QuizPage.jsx";
 import ResultPage from "./pages/ResultPage.jsx";
-import DashboardPage from "./pages/DashboardPage.jsx";
+import CohortAnalyticsPage from "./pages/CohortAnalyticsPage.jsx";
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -16,14 +17,8 @@ function useStoredUser() {
     const raw = localStorage.getItem("sb_user");
     return raw ? JSON.parse(raw) : null;
   });
-  const login = (u) => {
-    localStorage.setItem("sb_user", JSON.stringify(u));
-    setUser(u);
-  };
-  const logout = () => {
-    localStorage.removeItem("sb_user");
-    setUser(null);
-  };
+  const login = (u) => { localStorage.setItem("sb_user", JSON.stringify(u)); setUser(u); };
+  const logout = () => { localStorage.removeItem("sb_user"); setUser(null); };
   return { user, login, logout };
 }
 
@@ -39,28 +34,30 @@ function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
   if (!user) return null;
+
+  const isProgress = location.pathname === "/progress";
+  const isQuizFlow = /^\/(exams|subjects|quiz|result)/.test(location.pathname);
+  const isCohort = location.pathname === "/cohort";
+
   return (
-    <div className="topbar">
-      <div className="brand">Skillbytes Quiz</div>
+    <header className="topbar">
+      <Link to="/progress" className="brand">
+        <span className="brand-mark">S</span>
+        <span>Skillbytes Quiz</span>
+      </Link>
       <nav>
-        <Link to="/exams" className={location.pathname.startsWith("/exams") ? "active" : ""}>
-          Exams
-        </Link>
-        <Link to="/dashboard" className={location.pathname === "/dashboard" ? "active" : ""}>
-          Analytics
-        </Link>
+        <Link to="/progress" className={isProgress ? "active" : ""}>My Progress</Link>
+        <Link to="/exams" className={isQuizFlow ? "active" : ""}>Take a Quiz</Link>
+        <Link to="/cohort" className={isCohort ? "active" : ""}>Cohort Analytics</Link>
         <a
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            logout();
-            navigate("/login");
-          }}
+          href="/logout"
+          className="user-link"
+          onClick={(e) => { e.preventDefault(); logout(); navigate("/login"); }}
         >
           {user.name} · Logout
         </a>
       </nav>
-    </div>
+    </header>
   );
 }
 
@@ -71,55 +68,14 @@ export default function App() {
       <TopBar />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route
-          path="/exams"
-          element={
-            <RequireAuth>
-              <ExamsPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/exams/:examId/subjects"
-          element={
-            <RequireAuth>
-              <SubjectsPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/subjects/:subjectId/chapters"
-          element={
-            <RequireAuth>
-              <ChaptersPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/quiz/:sessionId"
-          element={
-            <RequireAuth>
-              <QuizPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/result/:sessionId"
-          element={
-            <RequireAuth>
-              <ResultPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={
-            <RequireAuth>
-              <DashboardPage />
-            </RequireAuth>
-          }
-        />
-        <Route path="*" element={<Navigate to={auth.user ? "/exams" : "/login"} replace />} />
+        <Route path="/progress" element={<RequireAuth><MyProgressPage /></RequireAuth>} />
+        <Route path="/exams" element={<RequireAuth><ExamsPage /></RequireAuth>} />
+        <Route path="/exams/:examId/subjects" element={<RequireAuth><SubjectsPage /></RequireAuth>} />
+        <Route path="/subjects/:subjectId/chapters" element={<RequireAuth><ChaptersPage /></RequireAuth>} />
+        <Route path="/quiz/:sessionId" element={<RequireAuth><QuizPage /></RequireAuth>} />
+        <Route path="/result/:sessionId" element={<RequireAuth><ResultPage /></RequireAuth>} />
+        <Route path="/cohort" element={<RequireAuth><CohortAnalyticsPage /></RequireAuth>} />
+        <Route path="*" element={<Navigate to={auth.user ? "/progress" : "/login"} replace />} />
       </Routes>
     </AuthContext.Provider>
   );

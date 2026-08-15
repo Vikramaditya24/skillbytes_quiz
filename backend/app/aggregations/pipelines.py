@@ -9,34 +9,53 @@ analytics collection").
 """
 
 
-def learning_velocity_pipeline() -> list[dict]:
+def learning_velocity_pipeline(user_id: str | None = None) -> list[dict]:
     """
     Group by user_id. Per user: attempt count, correct count, avg/std/min/max
     response time. Min/max/std computed in Mongo ($stdDevPop) rather than
     pulled into Python, per the "no application-side full-table pulls" rule.
+
+    When `user_id` is given, a $match is prepended so the exact same pipeline
+    powers both the cohort-wide ranking and a single learner's "My Progress"
+    numbers - one formula, two scopes, no duplicated logic.
     """
-    return [
+    stages: list[dict] = []
+    if user_id is not None:
+        stages.append({"$match": {"user_id": user_id}})
+    stages.append(
         {
             "$group": {
                 "_id": "$user_id",
                 "total_attempts": {"$sum": 1},
                 "correct_attempts": {"$sum": {"$cond": ["$is_correct", 1, 0]}},
                 "avg_response_time_ms": {"$avg": "$response_duration_ms"},
-                "std_response_time_ms": {"$stdDevPop": "$response_duration_ms"},
+                "sum_response_time_sq": {
+                    "$sum": {
+                        "$multiply": [
+                            "$response_duration_ms",
+                            "$response_duration_ms",
+                        ]
+                    }
+                },
                 "min_response_time_ms": {"$min": "$response_duration_ms"},
                 "max_response_time_ms": {"$max": "$response_duration_ms"},
             }
-        },
-    ]
+        }
+    )
+    return stages
 
 
-def fatigue_pipeline(window_size: int) -> list[dict]:
+def fatigue_pipeline(window_size: int, user_id: str | None = None) -> list[dict]:
     """
     Group by (session_id, window). Window index = floor((seq-1)/window_size).
     One document per session per window; the service layer reassembles windows
     into per-session series and computes deltas against each session's window 0.
+    Same $match-prepend pattern as learning_velocity_pipeline for per-user scope.
     """
-    return [
+    stages: list[dict] = []
+    if user_id is not None:
+        stages.append({"$match": {"user_id": user_id}})
+    stages += [
         {
             "$addFields": {
                 "window_index": {
@@ -57,6 +76,7 @@ def fatigue_pipeline(window_size: int) -> list[dict]:
         },
         {"$sort": {"_id.session_id": 1, "_id.window_index": 1}},
     ]
+    return stages
 
 
 def question_difficulty_pipeline() -> list[dict]:
@@ -77,3 +97,22 @@ def question_difficulty_pipeline() -> list[dict]:
             }
         },
     ]
+
+
+def fatigue_question_pipeline(user_id: str | None = None) -> list[dict]:
+    """Return one aggregate row per question position within each session."""
+    stages: list[dict] = []
+    if user_id is not None:
+        stages.append({"$match": {"user_id": user_id}})
+    stages += [
+        {
+            "$group": {
+                "_id": {"session_id": "$session_id", "question_number": "$question_sequence_number"},
+                "attempts": {"$sum": 1},
+                "correct_attempts": {"$sum": {"$cond": ["$is_correct", 1, 0]}},
+                "avg_response_time_ms": {"$avg": "$response_duration_ms"},
+            }
+        },
+        {"$sort": {"_id.session_id": 1, "_id.question_number": 1}},
+    ]
+    return stages

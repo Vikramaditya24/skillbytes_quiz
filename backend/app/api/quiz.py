@@ -10,7 +10,7 @@ from app.schemas.quiz import (
     SubmitAnswerRequest,
     SubmitAnswerResponse,
 )
-from app.services.quiz_service import QuizProgressionError, QuizService
+from app.services.quiz_service import OwnershipError, QuizProgressionError, QuizService
 
 router = APIRouter(tags=["quiz"])
 
@@ -26,11 +26,20 @@ async def start_quiz(
 
 
 @router.get("/quiz-sessions/{session_id}/current-question", response_model=CurrentQuestionOut)
-async def current_question(session_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+async def current_question(
+    session_id: str, user_id: str, db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    """
+    `user_id` is a required query param (the frontend always sends the
+    logged-in user's id) - enforces that only the session's owner can view
+    its current question. See app/services/quiz_service.py OwnershipError.
+    """
     try:
-        return await QuizService(db).get_current_question(session_id)
+        return await QuizService(db).get_current_question(session_id, user_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OwnershipError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except QuizProgressionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -41,20 +50,24 @@ async def submit_answer(
 ):
     try:
         return await QuizService(db).submit_answer(
-            session_id, payload.question_id, payload.selected_option_key
+            session_id, payload.user_id, payload.question_id, payload.selected_option_key
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OwnershipError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except QuizProgressionError as exc:
         # 409 Conflict: revisit attempt, duplicate submit, or answering after completion.
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/quiz-sessions/{session_id}/result", response_model=QuizResultOut)
-async def get_result(session_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+async def get_result(session_id: str, user_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
     try:
-        return await QuizService(db).get_result(session_id)
+        return await QuizService(db).get_result(session_id, user_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OwnershipError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except QuizProgressionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

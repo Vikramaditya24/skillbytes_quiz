@@ -8,6 +8,12 @@ _client: AsyncIOMotorClient | None = None
 def get_client() -> AsyncIOMotorClient:
     global _client
     if _client is None:
+        # tz_aware=True: PyMongo stores datetimes as UTC but returns them
+        # *naive* on read by default. Our code writes tz-aware UTC timestamps
+        # (datetime.now(timezone.utc)) - without this flag, a value written
+        # aware comes back naive, and subtracting a naive datetime from an
+        # aware one raises TypeError. This makes reads aware too, so every
+        # datetime in the app is consistently tz-aware UTC.
         _client = AsyncIOMotorClient(settings.mongo_uri, tz_aware=True)
     return _client
 

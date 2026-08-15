@@ -47,16 +47,56 @@ class TestEventShape:
     """
 
     async def test_attempt_document_has_all_required_fields(self, db):
-        from tests.test_quiz_progression import seed_minimal_catalog, seed_session
+        from tests.test_quiz_progression import OWNER, seed_minimal_catalog, seed_session
         from app.services.quiz_service import QuizService
 
         catalog = await seed_minimal_catalog(db)
         session_id = await seed_session(db, catalog)
         service = QuizService(db)
 
-        await service.get_current_question(session_id)
-        await service.submit_answer(session_id, catalog["question_ids"][0], "A")
+        await service.get_current_question(session_id, OWNER)
+        await service.submit_answer(session_id, OWNER, catalog["question_ids"][0], "A")
 
         attempt = await db.question_attempts.find_one({"session_id": session_id})
         assert REQUIRED_EVENT_FIELDS.issubset(attempt.keys())
         assert attempt["response_duration_ms"] >= 0
+
+
+class TestNoArchetypeLeak:
+    """
+    Seed data tags users with an internal `_archetype` field for generating
+    deterministic behavior (see scripts/seed.py). It must never appear in any
+    API response - it's a display-identity leak, and defeats the point of
+    giving seed users realistic names.
+    """
+
+    async def test_user_out_schema_has_no_archetype_field(self, client, db):
+        await db.users.insert_one(
+            {
+                "name": "Test User",
+                "email": "t@x.com",
+                "created_at": datetime.now(timezone.utc),
+                "_archetype": "high_accuracy_fast",
+            }
+        )
+        resp = await client.get("/auth/users")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 1
+        assert "_archetype" not in body[0]
+        assert "archetype" not in body[0]
+
+    async def test_login_response_has_no_archetype_field(self, client, db):
+        user = await db.users.insert_one(
+            {
+                "name": "Test User",
+                "email": "t2@x.com",
+                "created_at": datetime.now(timezone.utc),
+                "_archetype": "declining",
+            }
+        )
+        resp = await client.post("/auth/login", json={"user_id": str(user.inserted_id)})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "_archetype" not in body["user"]
+        assert "archetype" not in body["user"]
