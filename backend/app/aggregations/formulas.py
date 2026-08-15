@@ -35,7 +35,7 @@ def consistency_score(mean_ms: float, std_ms: float, sample_size: int) -> tuple[
     100 / (1 + coefficient_of_variation). Lower variance relative to the mean
     -> higher score. Returns (score, low_sample_flag).
 
-    Edge cases (Milestone 0 Section E, carried forward):
+    Edge cases handled:
     - n < 2: stddev of a single point is not a meaningful measure of spread.
       Returns (None, True) rather than fabricating a number - the dashboard
       renders "insufficient data" for these instead of a misleading value.
@@ -56,8 +56,7 @@ def learning_velocity_index(accuracy: float, speed: float, consistency: float | 
     LVI = 50% accuracy + 30% speed + 20% consistency.
     When consistency is None (low sample), it is treated as neutral (50) for
     the composite score only - the entry is still flagged low_sample in the
-    API response so the frontend can visually distinguish it, per Milestone 0
-    ("ranked but visually flagged, not silently hidden").
+    API response so the frontend can visually distinguish it from actual low consistency.
     """
     consistency_for_score = consistency if consistency is not None else 50.0
     lvi = (

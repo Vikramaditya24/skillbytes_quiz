@@ -336,7 +336,7 @@ h3 { margin: 0; font-family: var(--font-sans); }
 
 .chart-card { min-height: 320px; }
 .chart-card.compact { min-height: 260px; }
-.chart-scroll { overflow-x: auto; }
+.chart-scroll { overflow-x: auto; overflow-y:hidden; }
 .chart-min-width { min-width: 720px; }
 
 table { width: 100%; border-collapse: collapse; font-size: 12.5px; }

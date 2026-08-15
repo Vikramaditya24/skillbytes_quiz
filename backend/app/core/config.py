@@ -11,8 +11,12 @@ class Settings(BaseSettings):
     mongo_uri: str = "mongodb://localhost:27017"
     mongo_db_name: str = "skillbytes_quiz"
 
+    # Public URLs used by deploy target(s)
+    frontend_url: str = "http://localhost:5173"
+    backend_url: str = "http://localhost:8000"
+
     # Quiz behavior
-    quiz_session_size: int = 15  # questions sampled per session (see README: Assumptions B3)
+    quiz_session_size: int = 15  # questions sampled per session (see README: Assumptions #3)
 
     # Analytics tunables
     fatigue_window_size: int = 5  # matches spec's "Questions 1-5 / 6-10 / 11-15" example
@@ -30,6 +34,8 @@ class Settings(BaseSettings):
     difficulty_time_weight: float = 0.3
 
     cors_origins: str = "http://localhost:5173"
+    cors_origin_regex: str | None = None
+    port: int = 8000
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

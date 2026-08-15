@@ -38,7 +38,7 @@ N_EXAMS = 3
 N_SUBJECTS = 10
 N_CHAPTERS = 30
 N_QUESTIONS = 500
-SUBJECTS_PER_EXAM = [3, 3, 4]  # sums to 10 - see README > Assumptions B2
+SUBJECTS_PER_EXAM = [3, 3, 4]  # sums to 10 - see README > Assumptions #2
 
 ARCHETYPES = [
     "high_accuracy_fast",

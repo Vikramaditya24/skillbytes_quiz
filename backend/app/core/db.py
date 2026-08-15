@@ -32,7 +32,7 @@ async def close_client() -> None:
 
 async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     """
-    Index set matches Milestone 0 Section D exactly. No speculative indexes on
+    Minimal design: only indexes required for query performance. No speculative indexes on
     exams/subjects/chapters/users - these are small, fully-scanned lookup tables.
     """
     await db.questions.create_index("chapter_id")

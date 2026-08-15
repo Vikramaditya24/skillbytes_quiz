@@ -4,8 +4,7 @@ Raw MongoDB aggregation pipelines. Kept separate from app/services/analytics.py
 compute", the service file answers "how do we turn those numbers into a score".
 
 All three pipelines read only from `question_attempts` - the single canonical
-event stream (per Milestone 0 Section C: "Never writes. No duplicated/derived
-analytics collection").
+event stream. Behavior: Never writes duplicates or derived data.
 """
 
 
@@ -85,7 +84,7 @@ def question_difficulty_pipeline() -> list[dict]:
     """
     Group by question_id, carrying chapter_id through (via $first, since it's
     constant per question) so the service layer can normalize response time
-    within each question's own chapter cohort (Milestone 0 Section E rationale:
+    within each question's own chapter cohort (rationale:
     a naturally slower chapter shouldn't make every question in it look hard).
     """
     return [

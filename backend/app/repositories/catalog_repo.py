@@ -5,8 +5,8 @@ from app.repositories.base import serialize, to_object_id
 
 class CatalogRepository:
     """
-    Trivial CRUD/lookups only - deliberately no service layer in front of these
-    per Milestone 0 (router -> repository directly for one-line queries).
+    Trivial CRUD/lookups only - deliberately no service layer in front of these.
+    Routes queries directly to repository for one-line, stateless lookups.
     """
 
     def __init__(self, db: AsyncIOMotorDatabase):

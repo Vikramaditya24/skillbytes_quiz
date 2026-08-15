@@ -1,6 +1,6 @@
 """
 Pure unit tests against known inputs/expected outputs - no DB, no FastAPI.
-Covers the edge cases called out in Milestone 0 / engineering review:
+Covers critical edge cases:
 low-sample consistency, equal-response-time speed/difficulty scoring.
 """
 
@@ -120,8 +120,7 @@ class TestFatigueDeltasAndFlag:
         assert formulas.fatigue_flag(acc_delta, time_delta) is True
 
     def test_only_accuracy_drop_does_not_flag(self):
-        # Requires BOTH signals per Milestone 0 - accuracy drop alone (e.g.
-        # harder questions later) shouldn't be mislabeled as fatigue.
+       
         acc_delta, time_delta = formulas.fatigue_deltas(80, 3000, 60, 2900)
         assert formulas.fatigue_flag(acc_delta, time_delta) is False
 

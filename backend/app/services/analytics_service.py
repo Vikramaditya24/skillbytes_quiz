@@ -245,10 +245,9 @@ class AnalyticsService:
 
         results: list[FatigueSessionEntry] = []
 
-        # IMPORTANT:
-        # session_id is defined by this loop before it is used. Every
-        # session's windows, user resolution and question progression belong
-        # inside this loop.
+        # Process each session: compute windows, resolve user ID, and build
+        # question progression within each iteration to keep session-specific
+        # data together and avoid cross-session contamination.
         for session_id, windows_raw in by_session.items():
             windows_raw = sorted(
                 windows_raw,

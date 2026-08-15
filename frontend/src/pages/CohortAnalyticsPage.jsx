@@ -123,7 +123,7 @@ function LearningVelocityTab() {
 
     <div className="card chart-card compact">
       <div className="chart-scroll"><div className="chart-min-width" style={{ minWidth: Math.max(720, chartData.length * 34) }}>
-        <ResponsiveContainer width="100%" height={300}>
+        <ResponsiveContainer width="100%" height={400}>
           <BarChart data={chartData} margin={{ top: 8, right: 18, left: 0, bottom: 48 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
             <XAxis dataKey="name" interval={0} height={75} tick={(props) => <NameTick {...props} meName={user.name} />} />
@@ -173,7 +173,7 @@ function FatigueTab() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [selectedSession, setSelectedSession] = useState(null);
-  const [onlyMine, setOnlyMine] = useState(false);
+  const [onlyMine, setOnlyMine] = useState(true);
 
   useEffect(() => {
     api.fatigue().then((d) => {

@@ -36,12 +36,15 @@ class CurrentQuestionOut(BaseModel):
 
 
 class SubmitAnswerRequest(BaseModel):
+    """
+    Submit an answer to the current question. Note: shown_at is server-side
+    only and is not accepted in this request. The server uses the timestamp
+    it stamped when serving the question (per README Assumptions #4) to
+    calculate response_duration_ms.
+    """
     user_id: str
     question_id: str
     selected_option_key: str
-    # shown_at is accepted only as a hint for local UI display; server truth
-    # (app/services/quiz.py) uses the shown_at it stamped when serving the
-    # question, per Milestone 0 decision B4.
 
 
 class SubmitAnswerResponse(BaseModel):
