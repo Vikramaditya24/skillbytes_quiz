@@ -79,6 +79,145 @@ class TestLearningVelocityIndex:
         assert entry.low_sample is True
         # LVI must still be computed (using the neutral consistency default)
         assert entry.learning_velocity_index > 0
+    async def test_speed_is_normalized_across_cohort(self, db):
+        """
+        Speed must be comparable between learners.
+
+        Two learners with nearly identical response times should not receive
+        radically different speed scores simply because their individual
+        response-time ranges differ.
+        """
+        base = datetime.now(timezone.utc)
+
+        u1 = await db.users.insert_one(
+            {
+                "name": "Accurate Learner",
+                "email": "accurate@example.com",
+                "created_at": base,
+            }
+        )
+        u2 = await db.users.insert_one(
+            {
+                "name": "Fast Learner",
+                "email": "fast@example.com",
+                "created_at": base,
+            }
+        )
+        u3 = await db.users.insert_one(
+            {
+                "name": "Slow Learner",
+                "email": "slow@example.com",
+                "created_at": base,
+            }
+        )
+
+        uid1 = str(u1.inserted_id)
+        uid2 = str(u2.inserted_id)
+        uid3 = str(u3.inserted_id)
+
+        attempts = []
+
+        # Accurate learner:
+        # 100% accuracy with an average response time very close to the
+        # slightly faster learner below.
+        accurate_durations = [
+            3500, 3700, 3800, 3900, 4000,
+            3600, 3700, 3800, 3900, 4000,
+        ]
+        accurate_correct = [
+            True, True, True, True, True,
+            True, True, True, True, True,
+        ]
+
+        for seq, (duration, correct) in enumerate(
+            zip(accurate_durations, accurate_correct),
+            start=1,
+        ):
+            attempts.append(
+                attempt(
+                    "accurate-session",
+                    uid1,
+                    f"q-accurate-{seq}",
+                    "ch1",
+                    seq,
+                    duration,
+                    correct,
+                    base,
+                )
+            )
+
+        # Fast learner:
+        # 90% accuracy, but a nearly identical average response time.
+        fast_durations = [
+            3500, 3600, 3700, 3900, 4000,
+            3600, 3700, 3800, 3900, 4000,
+        ]
+        fast_correct = [
+            True, True, True, True, True,
+            True, True, True, True, False,
+        ]
+
+        for seq, (duration, correct) in enumerate(
+            zip(fast_durations, fast_correct),
+            start=1,
+        ):
+            attempts.append(
+                attempt(
+                    "fast-session",
+                    uid2,
+                    f"q-fast-{seq}",
+                    "ch1",
+                    seq,
+                    duration,
+                    correct,
+                    base,
+                )
+            )
+
+        # Slow learner establishes a meaningful cohort-wide upper bound.
+        slow_durations = [10000, 11000, 12000, 13000, 14000]
+
+        for seq, duration in enumerate(slow_durations, start=1):
+            attempts.append(
+                attempt(
+                    "slow-session",
+                    uid3,
+                    f"q-slow-{seq}",
+                    "ch1",
+                    seq,
+                    duration,
+                    True,
+                    base,
+                )
+            )
+        await db.question_attempts.insert_many(attempts)
+
+        result = await AnalyticsService(db).learning_velocity()
+
+        by_user = {
+            entry.user_id: entry
+            for entry in result.results
+        }
+
+        # The two learners have nearly identical response times, so their
+        # The two learners have nearly identical response times, so their
+        # cohort-relative speed scores should also be nearly identical.
+        assert abs(
+            by_user[uid1].speed_score - by_user[uid2].speed_score
+        ) < 5.0
+
+        # The more accurate learner should outrank the slightly faster learner
+        # because their response times are nearly identical.
+        assert (
+            by_user[uid1].learning_velocity_index
+            > by_user[uid2].learning_velocity_index
+        )
+
+        # The slow learner should have the lowest speed score.
+        assert (
+            by_user[uid3].speed_score
+            < by_user[uid1].speed_score
+        )
 
 
 class TestFatigueAnalysis:

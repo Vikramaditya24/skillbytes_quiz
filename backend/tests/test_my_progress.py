@@ -88,3 +88,82 @@ class TestMyProgressScoping:
         assert len(result.recent_sessions) == 1
         assert result.recent_sessions[0].chapter_name == "Algebra - Chapter 1"
         assert result.recent_sessions[0].score == 2
+    async def test_my_progress_uses_cohort_relative_lvi(self, db):
+        base = datetime.now(timezone.utc)
+
+        u1 = await db.users.insert_one(
+            {
+                "name": "Accurate",
+                "email": "accurate-lvi@example.com",
+                "created_at": base,
+            }
+        )
+        u2 = await db.users.insert_one(
+            {
+                "name": "Slow",
+                "email": "slow-lvi@example.com",
+                "created_at": base,
+            }
+        )
+
+        uid1 = str(u1.inserted_id)
+        uid2 = str(u2.inserted_id)
+
+        attempts = []
+
+        for seq, duration in enumerate(
+            [3000, 3200, 3400, 3600, 3800],
+            start=1,
+        ):
+            attempts.append(
+                attempt(
+                    "s1",
+                    uid1,
+                    f"q-fast-{seq}",
+                    "ch1",
+                    seq,
+                    duration,
+                    True,
+                    base,
+                )
+            )
+
+        for seq, duration in enumerate(
+            [9000, 10000, 11000, 12000, 13000],
+            start=1,
+        ):
+            attempts.append(
+                attempt(
+                    "s2",
+                    uid2,
+                    f"q-slow-{seq}",
+                    "ch1",
+                    seq,
+                    duration,
+                    True,
+                    base,
+                )
+            )
+
+        await db.question_attempts.insert_many(attempts)
+
+        cohort = await AnalyticsService(db).learning_velocity()
+
+        cohort_by_user = {
+            entry.user_id: entry
+            for entry in cohort.results
+        }
+
+        progress = await AnalyticsService(db).my_progress(uid1)
+
+        assert progress.learning_velocity is not None
+
+        assert (
+            progress.learning_velocity.learning_velocity_index
+            == cohort_by_user[uid1].learning_velocity_index
+        )
+
+        assert (
+            progress.learning_velocity.speed_score
+            == cohort_by_user[uid1].speed_score
+        )

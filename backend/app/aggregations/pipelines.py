@@ -10,26 +10,35 @@ event stream. Behavior: Never writes duplicates or derived data.
 
 def learning_velocity_pipeline(user_id: str | None = None) -> list[dict]:
     """
-    Group by user_id. Per user: attempt count, correct count, avg/min/max
-    response time, plus sum-of-squares of response time (used by the service
-    layer to derive population stddev via Var(X) = E[X^2] - E[X]^2, since
-    mongomock - used in tests - does not implement MongoDB's native
-    $stdDevPop group accumulator).
+    Group by user_id.
 
-    When `user_id` is given, a $match is prepended so the exact same pipeline
-    powers both the cohort-wide ranking and a single learner's "My Progress"
-    numbers - one formula, two scopes, no duplicated logic.
+    Per user:
+      - attempt count
+      - correct count
+      - average response time
+      - sum-of-squares of response time for population stddev
+
+    Speed normalization is intentionally NOT performed here. The service layer
+    receives all learner rows so average response times can be normalized
+    against the same cohort-wide range.
+
+    When user_id is given, filtering is applied AFTER the per-user grouping.
+    This preserves the cohort-wide aggregation inputs while allowing callers
+    to request a single learner's result.
     """
-    stages: list[dict] = []
-    if user_id is not None:
-        stages.append({"$match": {"user_id": user_id}})
-    stages.append(
+    stages: list[dict] = [
         {
             "$group": {
                 "_id": "$user_id",
                 "total_attempts": {"$sum": 1},
-                "correct_attempts": {"$sum": {"$cond": ["$is_correct", 1, 0]}},
-                "avg_response_time_ms": {"$avg": "$response_duration_ms"},
+                "correct_attempts": {
+                    "$sum": {
+                        "$cond": ["$is_correct", 1, 0]
+                    }
+                },
+                "avg_response_time_ms": {
+                    "$avg": "$response_duration_ms"
+                },
                 "sum_response_time_sq": {
                     "$sum": {
                         "$multiply": [
@@ -38,14 +47,20 @@ def learning_velocity_pipeline(user_id: str | None = None) -> list[dict]:
                         ]
                     }
                 },
-                "min_response_time_ms": {"$min": "$response_duration_ms"},
-                "max_response_time_ms": {"$max": "$response_duration_ms"},
             }
         }
-    )
+    ]
+
+    if user_id is not None:
+        stages.append(
+            {
+                "$match": {
+                    "_id": user_id,
+                }
+            }
+        )
+
     return stages
-
-
 def fatigue_pipeline(window_size: int, user_id: str | None = None) -> list[dict]:
     """
     Group by (session_id, window). Window index = floor((seq-1)/window_size).

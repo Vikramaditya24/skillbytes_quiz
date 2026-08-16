@@ -16,8 +16,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 @router.get("/learning-velocity", response_model=LearningVelocityResponse)
 async def learning_velocity(db: AsyncIOMotorDatabase = Depends(get_db)):
-    """Cohort-wide LVI ranking across all learners - this is what the metric
-    is defined to compare, so it is intentionally not scoped to one user."""
+    """Cohort-wide LVI ranking across all learners"""
     return await AnalyticsService(db).learning_velocity()
 
 

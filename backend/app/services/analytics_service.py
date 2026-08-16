@@ -22,12 +22,19 @@ from app.schemas.analytics import (
 
 class AnalyticsService:
     """
-    Reads analytics from `question_attempts` and performs light lookups for
-    display metadata.
+    Calculate Learning Velocity Index from the canonical question_attempts stream.
 
-    MongoDB performs the grouping/aggregation. Python only derives the final
-    metric components from the already-grouped result set and composes the
-    response models.
+    MongoDB performs the per-user aggregation. Python derives:
+    - accuracy
+    - cohort-relative response speed
+    - response-time consistency
+    - final weighted LVI
+
+    Response speed is normalized using the cohort-wide range of learner
+    average response times so the speed component is comparable across users.
+
+    When user_id is provided, the same cohort-wide normalization is used and
+    only that learner's result is returned.
     """
 
     def __init__(self, db: AsyncIOMotorDatabase):
@@ -37,8 +44,11 @@ class AnalyticsService:
         self,
         user_id: str | None = None,
     ) -> LearningVelocityResponse:
+        # Always aggregate the full learner cohort first so that response speed
+        # is normalized against the same cohort-wide range. For personal progress,
+        # we select the requested learner after deriving the shared normalization.
         rows = await self.db.question_attempts.aggregate(
-            pipelines.learning_velocity_pipeline(user_id=user_id)
+            pipelines.learning_velocity_pipeline()
         ).to_list(length=None)
 
         if not rows:
@@ -46,7 +56,16 @@ class AnalyticsService:
                 weights=self._lvi_weights(),
                 results=[],
             )
+        # Speed must be comparable across learners. Normalize each learner's
+        # average response time against the cohort-wide average response-time range.
+        cohort_avg_times = [
+            r["avg_response_time_ms"]
+            for r in rows
+            if r.get("avg_response_time_ms") is not None
+        ]
 
+        cohort_min_ms = min(cohort_avg_times)
+        cohort_max_ms = max(cohort_avg_times)
         # Real application users use ObjectId values. Some aggregation tests
         # use simple string IDs, so only attempt the optional name lookup for
         # IDs that can actually be converted to ObjectId.
@@ -81,8 +100,8 @@ class AnalyticsService:
 
             speed = formulas.speed_score(
                 mean_ms,
-                r["min_response_time_ms"],
-                r["max_response_time_ms"],
+                cohort_min_ms,
+                cohort_max_ms,
             )
 
             # Mongo's $stdDevPop is not implemented by mongomock.
@@ -126,7 +145,12 @@ class AnalyticsService:
                     low_sample=low_sample,
                 )
             )
-
+        if user_id is not None:
+            entries = [
+                entry
+                for entry in entries
+                if entry.user_id == user_id
+            ]
         entries.sort(
             key=lambda entry: entry.learning_velocity_index,
             reverse=True,
