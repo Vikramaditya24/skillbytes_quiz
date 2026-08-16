@@ -310,10 +310,11 @@ function DifficultyTab() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   useEffect(() => { api.questionDifficulty().then(setData).catch((e) => setError(e.message)); }, []);
+  console.log(data)
   if (error) return <ErrorState error={error} />;
   if (!data) return <div className="skeleton-chart" />;
 
-  const chartData = data.results.slice(0, 40).map((r) => ({ name: r.question_id.slice(-6), Difficulty: r.difficulty_score }));
+  const chartData = data.results.slice(0, 50).map((r,index) => ({ name: "Q-"+String(index + 1).padStart(2, '0'), Difficulty: r.difficulty_score }));
   return <div>
     <div className="explain"><strong>Question Difficulty Index.</strong> Difficulty combines {data.weights.inverted_accuracy * 100}% inverted accuracy with {data.weights.relative_time * 100}% relative response time. Higher means harder. Response time is normalized within the question's chapter so naturally slower chapters do not bias the entire ranking.</div>
     <div className="card chart-card compact">
@@ -329,8 +330,8 @@ function DifficultyTab() {
         </ResponsiveContainer>
       </div></div>
     </div>
-    <div className="card table-wrap"><table><thead><tr><th>#</th><th>Question</th><th>Attempts</th><th>Accuracy</th><th>Avg response</th><th>Difficulty</th></tr></thead>
-      <tbody>{data.results.slice(0, 50).map((r, i) => <tr key={r.question_id} className={r.low_sample ? "low-sample" : ""}><td className="rank">{i + 1}</td><td style={{ minWidth: 320 }}>{r.question_text}</td><td>{r.total_attempts}</td><td>{r.accuracy_pct}%</td><td>{seconds(r.avg_response_time_ms)}</td><td><strong>{r.difficulty_score}</strong>{r.low_sample && <span className="badge" style={{ marginLeft: 6 }}>low sample</span>}</td></tr>)}</tbody>
+    <div className="card table-wrap"><table><thead><tr><th>Q-No</th><th>Question</th><th>Attempts</th><th>Accuracy</th><th>Avg response</th><th>Difficulty</th></tr></thead>
+      <tbody>{data.results.slice(0, 50).map((r, i) => <tr key={r.question_id} className={r.low_sample ? "low-sample" : ""}><td className="rank">{"Q-"+String(i + 1).padStart(2, '0')}</td><td style={{ minWidth: 320 }}>{r.question_text}</td><td>{r.total_attempts}</td><td>{r.accuracy_pct}%</td><td>{seconds(r.avg_response_time_ms)}</td><td><strong>{r.difficulty_score}</strong>{r.low_sample && <span className="badge" style={{ marginLeft: 6 }}>low sample</span>}</td></tr>)}</tbody>
     </table></div>
   </div>;
 }
