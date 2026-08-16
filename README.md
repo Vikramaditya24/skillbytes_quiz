@@ -1,403 +1,790 @@
-# Skillbytes Quiz Application
+# SkillBytes Quiz Application
 
-A quiz platform (React + FastAPI + MongoDB) built for the Skillbytes full-stack
-hiring assignment. Flow: **Login -> My Progress -> Exam -> Subject -> Chapter ->
-Quiz -> Result**, plus a separate **Cohort Analytics** section covering the
-three required analytics APIs (Learning Velocity Index, Fatigue Analysis,
-Question Difficulty Index).
+A full-stack quiz and learning analytics platform built for the SkillBytes Junior Full Stack Developer assessment.
 
-## Setup instructions
+**Live application**
+- Frontend: https://skillbytes-quiz-delta.vercel.app/
+- Backend: https://skillbytes-quiz-na42.onrender.com
+- Repository: https://github.com/Vikramaditya24/skillbytes_quiz
+- Walkthrough: https://www.loom.com/share/8bc22a1a4eb94fa8ba846893a6150e30
 
-### Option A - Docker
+## Overview
+
+The application implements the complete learner flow:
+
+**Login → My Progress → Exam → Subject → Chapter → Quiz → Result**
+
+It also provides a separate **Cohort Analytics** area containing the three analytics metrics explicitly described in the assignment:
+
+1. Learning Velocity Index
+2. Fatigue Analysis
+3. Question Difficulty Index
+
+The backend is built with **FastAPI + MongoDB** and the frontend with **React + Vite**.
+
+The implementation intentionally follows the assignment's dummy-auth requirement rather than introducing unnecessary production authentication.
+
+## Tech Stack
+
+### Frontend
+- React
+- Vite
+- React Router
+- Charting library
+- Responsive UI
+
+### Backend
+- Python
+- FastAPI
+- Pydantic
+- Motor / PyMongo
+- MongoDB
+- pytest
+- mongomock-motor
+
+### Architecture
+
+```text
+React
+  ↓
+API layer
+  ↓
+FastAPI routers
+  ↓
+Services
+  ↓
+Repositories
+  ↓
+MongoDB
+```
+
+Analytics use a separate path:
+
+```text
+MongoDB question_attempts
+        ↓
+Mongo aggregation pipelines
+        ↓
+Grouped metrics
+        ↓
+Pure Python scoring formulas
+        ↓
+Analytics API
+        ↓
+React visualizations
+```
+
+The repository follows a **Router → Service → Repository** dependency direction.
+
+Simple catalog reads intentionally bypass the service layer where there is no business logic. Services are used where actual orchestration or business rules exist, particularly quiz progression and analytics.
+
+## Project Structure
+
+```text
+/
+├── backend/
+│   ├── app/
+│   │   ├── api/              # FastAPI routers
+│   │   ├── services/         # Quiz and analytics business logic
+│   │   ├── repositories/     # MongoDB access layer
+│   │   ├── schemas/          # Pydantic request/response models
+│   │   ├── core/             # Settings, DB connection, indexes
+│   │   └── aggregations/     # Mongo pipelines and pure scoring formulas
+│   ├── scripts/
+│   │   ├── seed.py           # Deterministic database seed
+│   │   └── question_bank.py  # Deterministic MCQ generator
+│   └── tests/
+│
+├── frontend/
+│   └── src/
+│       ├── pages/            # Application pages
+│       └── api/              # API client
+│
+├── docker-compose.yml
+└── README.md
+```
+
+## Running Locally
+
+### Option A — Docker
+
+Copy the example environment file:
 
 ```bash
-cp backend/.env.example backend/.env   # optional, defaults work out of the box
+cp backend/.env.example backend/.env
+```
+
+Then:
+
+```bash
 docker compose up --build
 ```
 
-- Backend: http://localhost:8000 (interactive docs at /docs)
-- Frontend: http://localhost:5173
-- MongoDB: localhost:27017
+Services:
 
-Then seed the database (one-time; re-run any time you want a fresh deterministic dataset):
+```text
+Frontend: http://localhost:5173
+Backend:  http://localhost:8000
+API docs: http://localhost:8000/docs
+MongoDB:  localhost:27017
+```
+
+Seed the database:
 
 ```bash
 docker compose exec backend python scripts/seed.py
 ```
 
-### Option B - Local, no Docker
+The seed script is deterministic and can safely be rerun when a fresh dataset is required.
 
-Requires Python 3.11+, Node 20+, and a MongoDB instance reachable at
-mongodb://localhost:27017 (the quickest way to get one without installing
-MongoDB natively is `docker run -d --name skillbytes-mongo -p 27017:27017 mongo:7`).
+### Option B — Local development without Docker
+
+Requirements:
+
+- Python 3.11+
+- Node.js 20+
+- MongoDB
+
+Backend:
 
 ```bash
-# backend
 cd backend
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python scripts/seed.py
-uvicorn app.main:app --reload
+python -m venv .venv
+```
 
-# frontend (separate terminal)
+Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+macOS/Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Seed MongoDB:
+
+```bash
+python scripts/seed.py
+```
+
+Run the API:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+In another terminal:
+
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-The seed script prints a "Demo users" list at the end - one user per
-behavioral pattern (high-accuracy-fast, high-accuracy-slow, improving,
-declining, inconsistent, low-accuracy) with amplified signal, specifically
-for demoing distinct analytics during the Loom walkthrough. Log in as any of
-them from the login screen.
+## Testing
 
-## Testing instructions
+Run the backend test suite:
 
 ```bash
 cd backend
-pytest
+pytest -q
 ```
 
-Tests use mongomock-motor (in-memory Mongo), so no real database is needed
-to run the suite - except TestSeedScriptIdentitiesAndCounts in
-test_seed_content.py, which imports scripts/seed.py and therefore needs
-motor importable (it does not touch a database, but seed.py imports motor
-at module scope). If motor isn't installed, that one test class is skipped
-via pytest.importorskip, not silently passed.
+The test suite uses `mongomock-motor` for database-backed tests, so a real MongoDB instance is not required for the normal test run.
 
-Test coverage:
-- test_formulas.py - pure unit tests for every analytics formula (accuracy,
-  speed, consistency, LVI, difficulty, fatigue deltas/flag) against known
-  inputs/outputs, including edge cases (n=1, equal min/max, zero mean).
-- test_quiz_progression.py - question ordering, scoring, no-revisit
-  enforcement, duplicate-submit rejection, session completion, session
-  ownership (a user cannot view/answer/get-results for another user's
-  session), and a regression test for the shown_at idempotency fix
-  (repeated current-question calls must not reset the timestamp).
-- test_analytics_aggregation.py - behavioral tests against deterministic
-  fixtures with known expected outcomes (a synthetic "perfect learner" ranks
-  #1 in LVI, a declining-performance session trips fatigue_flag, a
-  slow/inaccurate question outranks a fast/accurate one in difficulty).
-- test_my_progress.py - confirms the personal-progress endpoint is
-  correctly scoped per user (two users' attempts never mix) and correctly
-  reports "no data yet" for a fresh user.
-- test_auth_and_events.py - dummy login, event-document field completeness,
-  and confirms the internal _archetype seed field never appears in any API
-  response.
-- test_seed_content.py - question-bank correctness (exactly 4 options,
-  exactly 1 correct answer, no duplicate question text within a chapter, no
-  leftover placeholder text, deterministic given the same seed) and seed
-  script identity/archetype checks (realistic "First Last" names, no
-  "User14"-style names, unique emails, all 6 archetypes represented and
-  balanced, archetype assignment decoupled from name assignment).
+The suite covers:
 
-What was actually run vs. not, and why, is in the "Status of this
-submission" section at the bottom of this README - please read it before
-assuming the whole suite has been executed end-to-end.
+- Analytics formulas
+- Learning Velocity Index
+- Fatigue Analysis
+- Question Difficulty Index
+- Analytics aggregation behavior
+- Quiz progression
+- Question ordering
+- Server-side no-revisit enforcement
+- Duplicate answer rejection
+- Session ownership
+- `shown_at` timestamp idempotency
+- Personal progress scoping
+- Dummy login
+- Event structure
+- Seed data correctness
+- Deterministic seed behavior
+- Question-bank validity
+- Placeholder-content checks
+- Internal seed metadata not leaking through APIs
 
-## Project structure
+The final local backend suite passes:
 
-```
-/backend
-  /app
-    /api            # routers: auth, catalog, quiz, analytics
-    /services        # quiz progression + analytics orchestration
-    /repositories     # Mongo access layer, one per collection
-    /schemas          # Pydantic request/response models
-    /core             # settings, db client, index creation
-    /aggregations     # raw Mongo pipelines + pure scoring formulas
-  /scripts
-    seed.py            # deterministic seed data generator
-    question_bank.py    # deterministic, template-based MCQ content generator
-  /tests
-/frontend
-  /src/pages           # Login, MyProgress, Exams, Subjects, Chapters, Quiz, Result, CohortAnalytics
-  /src/api/client.js    # thin fetch wrapper
-docker-compose.yml
+```text
+104 passed
 ```
 
-Router -> Service -> Repository, one direction of dependency. Trivial CRUD
-(list exams/subjects/chapters) goes straight from router to repository - no
-service-layer ceremony for a one-line query. Service layer exists only where
-there's real logic: quiz progression/scoring and analytics assembly.
+Frontend production build:
 
-## Product model: My Progress vs. Cohort Analytics
+```bash
+cd frontend
+npm install
+npm run build
+```
 
-Login is dummy (per the assignment spec), but it still has a real, visible
-consequence: after logging in, a learner lands on My Progress - their own
-Learning Velocity Index, accuracy, recent quiz history, and (if they have a
-completed session) their own fatigue trend. This data is strictly scoped to
-the logged-in user; another learner's numbers never appear here.
+## Product Flow
 
-Cohort Analytics is a separate, clearly-labeled section holding the existing
-ranked/comparative views (LVI leaderboard across all learners, fatigue
-browser across all sessions, question difficulty ranking across all
-questions). This is intentionally not scoped to one user - the metrics are
-inherently comparative ("rank users by LVI" requires seeing all users), and
-the assignment's analytics APIs are specified as cross-learner by
-definition. No admin role or extra auth was introduced for this: any
-logged-in user can view Cohort Analytics, but the UI makes unmistakably
-clear which section is "you" and which is "everyone."
+### Login
 
-Both sections reuse the exact same formulas and Mongo pipelines - "My
-Progress" calls the same learning_velocity() / fatigue_analysis() service
-methods as Cohort Analytics, with an optional $match on user_id prepended to
-the pipeline (see app/aggregations/pipelines.py). This is one implementation
-with two scopes, not a duplicated one.
+The assignment specifies dummy login, so users select from seeded learners rather than entering passwords.
 
-## Session ownership
+After login, the learner is taken to **My Progress**.
 
-Every session-scoped endpoint (current-question, answer, result) requires
-the caller's user_id and checks it against the session's actual owner
-(quiz_sessions.user_id), raising OwnershipError -> HTTP 403 on mismatch
-(app/services/quiz_service.py). Given dummy auth, "being logged in" is
-knowing your own user_id - so this is the correct and sufficient enforcement
-boundary for this assignment's auth model without introducing JWTs or a
-permissions system. A learner cannot view or interfere with another
-learner's in-progress quiz by guessing or incrementing a session id.
+### My Progress
 
-## Database design
+My Progress is learner-specific.
 
-Everything is reference-based (ObjectId links), not embedded.
-question_attempts is a high-write, high-cardinality event stream (50 users
-x several sessions x up to 15 questions each); embedding it into
-quiz_sessions or users would force unbounded array growth and rule out the
-aggregation patterns analytics needs.
+It shows:
 
-exam_id / subject_id / chapter_id are the one deliberate denormalization -
-copied as scalar fields onto questions and question_attempts so analytics
-pipelines can $match by ancestry without a $lookup chain (attempt ->
-question -> chapter -> subject -> exam). This is safe because ancestry is
-immutable: a question never moves chapters.
+- Learning Velocity Index
+- Accuracy
+- Recent quiz history
+- Personal fatigue progression
+- Explanations of the metrics
 
-Collections: users (includes an internal-only _archetype field used solely
-by the seed script - never returned by any API, see
-test_auth_and_events.py::TestNoArchetypeLeak), exams, subjects, chapters,
-questions, quiz_sessions (mutable progression state), question_attempts
-(canonical, immutable analytics event stream - the single source of truth
-for all three analytics APIs; the analytics service only ever reads from
-it, never writes).
+A learner can only see their own progress.
 
-Indexes (see app/core/db.py - each has a documented reason, no speculative
-indexes on small lookup tables like exams/subjects):
+### Quiz
 
-| Collection | Index | Reason |
+The quiz flow is:
+
+```text
+Exam
+  ↓
+Subject
+  ↓
+Chapter
+  ↓
+Quiz
+  ↓
+One question at a time
+  ↓
+Result
+```
+
+The frontend does not determine which question comes next.
+
+The backend owns the progression state.
+
+### Cohort Analytics
+
+Cohort Analytics is intentionally separate from My Progress.
+
+It provides comparative views across learners:
+
+- LVI leaderboard
+- Fatigue analysis
+- Question difficulty ranking
+
+The distinction is explicit in the UI:
+
+```text
+My Progress       = you
+Cohort Analytics  = everyone
+```
+
+No admin role was invented because the assignment does not define one.
+
+## Session Ownership and Server-Side Enforcement
+
+Every session-scoped operation verifies that the authenticated user's `user_id` matches the owner stored in the quiz session.
+
+This applies to:
+
+- Current question
+- Answer submission
+- Result retrieval
+
+A learner therefore cannot access or modify another learner's quiz session simply by changing the session ID.
+
+The backend returns HTTP 403 when ownership validation fails.
+
+This is particularly important because the assignment uses dummy authentication.
+
+## No-Revisit Enforcement
+
+Quiz progression is server-controlled.
+
+`quiz_sessions.current_index` is the authoritative pointer to the current question.
+
+The server rejects attempts to answer:
+
+- A previous question
+- A future question
+- A question other than the current question
+
+The index is advanced atomically so concurrent or duplicate requests cannot incorrectly advance the quiz.
+
+There is also a database-level unique index on:
+
+```text
+(session_id, question_id)
+```
+
+This provides a second backstop against duplicate submissions.
+
+## `shown_at` Timestamp Idempotency
+
+Response time is calculated from the server-side `shown_at` timestamp.
+
+An important edge case was handled explicitly:
+
+A browser refresh or repeated request for the current question must not reset the timestamp.
+
+The implementation therefore only creates the timestamp if it does not already exist.
+
+This prevents a learner from accidentally or intentionally changing their measured response time simply by refreshing the page.
+
+A regression test covers this behavior.
+
+## Database Design
+
+The main MongoDB collections are:
+
+```text
+users
+exams
+subjects
+chapters
+questions
+quiz_sessions
+question_attempts
+```
+
+### `question_attempts` as the event source
+
+`question_attempts` is treated as the canonical immutable event stream.
+
+It contains the information required to calculate the analytics metrics.
+
+Analytics never write derived results back into the event collection.
+
+This keeps the analytics reproducible from the underlying events.
+
+### References vs embedding
+
+Relationships are represented using IDs rather than embedding large nested structures.
+
+This is particularly important for `question_attempts`, which is a high-write, high-cardinality event collection.
+
+Embedding attempts inside users or quiz sessions would create unnecessarily large mutable documents and make analytics less natural.
+
+### Deliberate denormalization
+
+Questions and attempts carry:
+
+```text
+exam_id
+subject_id
+chapter_id
+```
+
+in addition to their immediate relationship.
+
+This is deliberate denormalization.
+
+The hierarchy is immutable, so duplicating these scalar ancestry fields allows analytics pipelines to filter directly without repeatedly performing:
+
+```text
+attempt → question → chapter → subject → exam
+```
+
+## Indexes
+
+The application creates indexes based on actual access patterns.
+
+| Collection | Index | Purpose |
 |---|---|---|
-| questions | {chapter_id: 1} | Sampling a chapter's question pool at session start |
-| quiz_sessions | {user_id: 1, status: 1} | Resuming/checking in-progress sessions; My Progress's recent-sessions lookup |
-| question_attempts | {session_id: 1, question_id: 1} unique | The real DB-level backstop against duplicate submits/revisits |
-| question_attempts | {user_id: 1, session_id: 1, question_sequence_number: 1} | LVI (per-user) and Fatigue (per-session windowing) both $match on this first |
-| question_attempts | {question_id: 1} | Question Difficulty groups by question |
+| questions | `{ chapter_id: 1 }` | Sampling chapter questions |
+| quiz_sessions | `{ user_id: 1, status: 1 }` | Active/recent session lookups |
+| question_attempts | `{ session_id: 1, question_id: 1 }` unique | Duplicate/revisit protection |
+| question_attempts | `{ user_id: 1, session_id: 1, question_sequence_number: 1 }` | User/session analytics windowing |
+| question_attempts | `{ question_id: 1 }` | Question difficulty aggregation |
 
-## No-revisit / server-enforced progression
+Small lookup collections do not receive speculative indexes simply for completeness.
 
-The client never decides which question comes next. quiz_sessions.current_index
-is the server's pointer into the session's fixed question_ids array.
-Submitting an answer for any question other than the one at current_index
-is rejected (HTTP 409). Advancing current_index is done with an atomic
-find_one_and_update conditioned on the expected current index, which also
-closes the race condition where a client double-submits the same answer.
-The unique (session_id, question_id) index is a second, independent
-backstop at the database layer.
+# Analytics
 
-### shown_at idempotency fix
+All three analytics metrics operate from `question_attempts`.
 
-An earlier version of this codebase unconditionally overwrote
-shown_at_by_index.{idx} on every call to current-question, meaning a page
-refresh or a retried request would silently reset the clock that
-response_duration_ms is measured against. This is now fixed: the update is
-conditioned on {"$exists": False}, so shown_at is stamped once, on the first
-time a given question is served, and never again - regardless of how many
-times the endpoint is subsequently called for the same question. See
-app/services/quiz_service.py::get_current_question and the regression tests
-in test_quiz_progression.py::TestShownAtIdempotency.
+MongoDB performs grouping and aggregation where appropriate. The resulting grouped data is passed to isolated Python formula functions.
 
-## Analytics methodology
+This separation makes the statistical logic independently testable.
 
-All three read only from question_attempts; grouping/math is done in Mongo
-aggregation pipelines (app/aggregations/pipelines.py), and the small grouped
-result set is turned into scores by pure, isolated formula functions
-(app/aggregations/formulas.py) that are unit-tested directly. Formulas are
-unchanged from the original implementation - no z-scoring, winsorization, or
-other statistical complexity was reintroduced during the rebuild, per
-explicit instruction.
+## 1. Learning Velocity Index
 
-Accuracy = correct / total x 100.
+### Accuracy
 
-Speed score (0-100): relative position within the observed response-time
-range for that cohort - fastest observed time -> 100, slowest -> 0, linear
-in between. If every attempt took the same time (or n=1), returns a neutral
-50 rather than dividing by zero.
+```text
+accuracy = correct_attempts / total_attempts × 100
+```
 
-Consistency score = 100 / (1 + coefficient_of_variation) where CV =
-stddev / mean of response time. Lower variance -> higher score. Undefined
-for n<2 or mean=0 - returns null with a low_sample: true flag rather than
-fabricating a number; the UI renders "insufficient data" for these. n>=2 but
-n<5 is still scored but still flagged, since 2-4 points is weak evidence.
+### Speed score
 
-Learning Velocity Index = 50% accuracy + 30% speed + 20% consistency.
-Weights are named constants in app/core/config.py, not buried magic numbers.
-Accuracy dominates because the metric is explicitly "Learning Velocity" -
-speed and consistency are meant to be secondary/tie-breaking signals, not
-able to outrank a highly-accurate-but-average-speed learner. When
-consistency is null (low sample), the composite uses a neutral 50 for that
-component only, and the row is still visually flagged, not hidden.
+Speed is normalized relative to the observed response-time range for the cohort.
 
-Fatigue Analysis: attempts grouped into fixed windows of
-question_sequence_number (default size 5, configurable via
-FATIGUE_WINDOW_SIZE, matching the spec's own "Questions 1-5, 6-10, 11-15"
-example). Each window's accuracy and average response time are compared
-against that session's own first window. fatigue_flag is set only when
-accuracy drops by more than 5 percentage points AND response time rises by
-more than 10% versus baseline - both signals required, so
-naturally-harder-later-questions alone don't get mislabeled as fatigue.
-This is explicitly a descriptive heuristic, not a scientific or causal
-claim, and the API response says so directly (disclaimer field).
+```text
+fastest observed time → 100
+slowest observed time  → 0
+```
 
-Question Difficulty Score = 70% inverted accuracy (100 - accuracy%) + 30%
-relative response-time difficulty, where response time is normalized within
-the question's own chapter (so a naturally slower chapter, e.g. a
-reading-comprehension chapter, doesn't make every one of its questions look
-"hard" relative to a quick-recall chapter). Deliberately not 1 - accuracy
-alone - response time materially moves the ranking.
+If the observed range is zero, or there is only one observation, the score falls back to a neutral value of 50 rather than dividing by zero.
 
-Every metric has a plain-language "How is this calculated?" explanation
-inline in the UI (My Progress and Cohort Analytics both), so an evaluator
-can understand each number without reading source code.
+### Consistency
 
-## Seed data
+Consistency uses the coefficient of variation:
 
-scripts/seed.py is fully deterministic (fixed RNG_SEED = 42 - reruns
-produce identical data) and populates:
+```text
+CV = standard_deviation / mean
+```
 
-- 50 users with realistic "First Last" names and
-  firstname.lastname@learnhub.test emails, generated independently of their
-  behavioral archetype (no naming pattern reveals which archetype a user
-  has - see
-  test_seed_content.py::test_archetype_assignment_independent_of_name_order).
-  Archetype is stored as an internal-only _archetype field and never
-  surfaced through any API.
-- 3 exams, 10 subjects (3/3/4 split), 30 chapters, 500 questions. Questions
-  are generated by scripts/question_bank.py - a deterministic,
-  template-based content system, not placeholder text and not an LLM call.
-  Math/science subjects (Algebra, Geometry, Mechanics, Thermodynamics)
-  compute a genuine numeric answer from randomized-but-deterministic
-  parameters, with plausible near-miss distractors (off-by-one-step
-  arithmetic errors, common formula confusions - e.g. area vs. perimeter).
-  Fact-based subjects (Organic Chemistry, Cell Biology, Modern History,
-  Political Science, Grammar, Vocabulary) draw from curated fact banks
-  cycled through two phrasing variants each, sized so that no chapter (~17
-  questions) ever repeats a question - verified by
-  test_seed_content.py::TestQuestionBankContent across multiple RNG seeds.
-- Six behavioral archetypes (high_accuracy_fast, high_accuracy_slow,
-  improving, declining, inconsistent, low_accuracy) cycled across the 50
-  users, each with distinct accuracy/response-time/trend parameters. The
-  first user assigned to each archetype is a "hero" user - 5 completed
-  sessions instead of 2-3, and an amplified version of that archetype's
-  signal - specifically so that a single learner's own My Progress charts
-  demonstrate the pattern clearly, not just the cohort-wide ranking. The
-  script prints these six users' names/emails at the end of its run.
+Then:
 
-## Assumptions
+```text
+consistency = 100 / (1 + CV)
+```
 
-1. "Four analytics APIs" wording. The assignment PDF states "the following
-   four analytics APIs are the primary evaluation criteria" but then
-   numbers and describes exactly three (Learning Velocity Index, Fatigue
-   Analysis, Question Difficulty Index). No fourth metric is named anywhere
-   in the document. Treated as a wording error in the source, not an
-   unstated requirement.
-2. Exam/Subject/Chapter cardinality. Strict tree hierarchy: one exam per
-   subject, one subject per chapter, one chapter per question. 10 subjects
-   are split unevenly across 3 exams (3/3/4) since 10 doesn't divide evenly
-   by 3.
-3. Quiz session size. A session samples up to 15 questions from the parent
-   chapter's pool (configurable via QUIZ_SESSION_SIZE), randomized per
-   session. Chosen because the Fatigue spec's own example implies
-   15-question sessions, and re-samplable sessions give the analytics
-   enough volume across only 50 seeded users.
-4. Timestamp authority. Both shown_at and answered_at are stamped
-   server-side, not trusted from the client - consistent with the spec's
-   "don't rely solely on frontend state" instruction. Trade-off:
-   response_duration_ms includes network round-trip latency; documented
-   rather than hidden.
-5. quiz_id vs. session_id. The spec's event-tracking list names Quiz ID;
-   internally this is the quiz session id (quiz_sessions._id), since a
-   "quiz" in this app is a stateful session (sampled question order +
-   progression pointer), not a static entity.
-6. Auth model. Dummy login only, per the spec - selecting a predefined user
-   returns their id as a session_token. No JWT, no password. Login still
-   has real product meaning via the My Progress / Cohort Analytics split
-   and server-side session-ownership enforcement (see above), without
-   introducing a permissions system the assignment doesn't ask for.
-7. Cohort Analytics is not access-restricted to an admin role. The
-   assignment specifies analytics APIs but no admin/role concept. Rather
-   than invent one, Cohort Analytics is available to any logged-in user but
-   clearly labeled as cross-learner data, distinct from My Progress.
+For insufficient data, the implementation does not fabricate a statistically meaningful value. The UI marks the result as insufficient data.
 
-## What was deliberately left out
+### LVI
 
-Per the assignment's own guidance ("we are not evaluating how quickly you
-can scaffold CRUD") and the 4-day scope: no Redis/Kafka/microservices/CQRS/
-background workers/WebSockets, no production auth or admin role system, no
-z-score/winsorization/ML in the analytics, no speculative indexes on
-collections with <=10 documents, no runtime LLM or external API calls for
-question generation.
+The composite score is:
 
-## Status of this submission
+```text
+LVI =
+    50% accuracy
+  + 30% speed
+  + 20% consistency
+```
 
-The repository and the supplied assignment PDF were inspected before the final
-polish pass. The PDF is the requirements source of truth: it specifies React,
-FastAPI, MongoDB, dummy login, one-question-at-a-time MCQs, server-enforced
-no-revisit progression, event tracking, and three explicitly named analytics
-metrics despite calling them "four analytics APIs".
+Accuracy intentionally carries the greatest weight.
 
-The current implementation was preserved rather than rebuilt. Recent polish
-passes have focused on the personal-vs-cohort product split, question-level
-personal fatigue progression, readable response times, denser analytics
-visualizations, quiz UX, navigation, empty/error states, dead-code/doc
-cleanup, and visual consistency.
+The design goal is that speed and consistency refine the ranking rather than allowing a significantly less accurate learner to automatically outrank a highly accurate learner simply because they answer slightly faster.
 
-**The full backend test suite has been run locally (not just in a sandbox)
-and passed: 104/104 tests green**, covering formulas, quiz progression,
-no-revisit/duplicate-submit rejection, session ownership, the `shown_at`
-idempotency fix, all three analytics APIs against deterministic fixtures,
-My Progress scoping, and seed-content correctness (question shape,
-determinism, no placeholder text).
+The weights are named configuration constants rather than magic numbers.
 
-If you're verifying in a fresh environment:
+## 2. Fatigue Analysis
+
+Attempts are grouped into fixed question windows.
+
+The default is:
+
+```text
+Questions 1–5
+Questions 6–10
+Questions 11–15
+```
+
+The window size is configurable.
+
+Each later window is compared with that learner's own first window.
+
+A fatigue flag is raised only when both conditions occur:
+
+```text
+accuracy decreases by >5 percentage points
+AND
+average response time increases by >10%
+```
+
+This avoids labeling a learner as fatigued solely because later questions happen to be more difficult.
+
+The metric is presented as a descriptive heuristic rather than a scientific or causal diagnosis.
+
+## 3. Question Difficulty Index
+
+Question difficulty combines two signals:
+
+```text
+70% inverted accuracy
++
+30% relative response-time difficulty
+```
+
+Inverted accuracy:
+
+```text
+100 - question accuracy
+```
+
+Response time is normalized within the question's chapter so that an inherently slower chapter does not automatically make all of its questions appear more difficult than questions from faster chapters.
+
+The purpose is to identify questions that are both:
+
+- frequently answered incorrectly
+- relatively time-consuming
+
+## Analytics Explainability
+
+The UI includes plain-language explanations of how each metric is calculated.
+
+This is intentional: an evaluator should be able to understand the meaning and limitations of the metrics without inspecting the implementation.
+
+# Seed Data
+
+The seed script creates a deterministic demonstration dataset.
+
+The random seed is fixed, so repeated runs produce reproducible data.
+
+The dataset contains:
+
+- 50 learners
+- 3 exams
+- 10 subjects
+- 30 chapters
+- 500 questions
+
+Six behavioral archetypes are represented:
+
+```text
+high_accuracy_fast
+high_accuracy_slow
+improving
+declining
+inconsistent
+low_accuracy
+```
+
+The archetype is stored internally as `_archetype` and is never returned through the API.
+
+Names are generated independently of behavioral archetype so that a learner's name does not reveal their analytics profile.
+
+The seed script also creates several stronger "hero" profiles with additional completed sessions so that the different behavioral patterns are easy to demonstrate during the application walkthrough.
+
+## Question Bank
+
+The question bank is deterministic and template-based.
+
+It does not call an LLM or external API at runtime.
+
+The generated content includes:
+
+- Mathematics
+- Science
+- History
+- Biology
+- Chemistry
+- Political Science
+- Grammar
+- Vocabulary
+
+Numerical subjects use deterministic parameterized calculations and plausible distractors.
+
+Fact-based subjects use curated fact banks with multiple phrasing variants.
+
+Tests verify:
+
+- exactly four options per question
+- exactly one correct option
+- no duplicate question text within a chapter
+- no leftover placeholder content
+- deterministic output
+
+# Authentication
+
+Authentication is intentionally simple because the assignment specifies dummy login.
+
+There are:
+
+- no passwords
+- no JWT implementation
+- no external identity provider
+- no role/permission system
+
+Selecting a predefined learner establishes the current learner identity.
+
+The application nevertheless enforces session ownership server-side.
+
+This provides meaningful authorization behavior without introducing authentication infrastructure that the assignment did not request.
+
+# Deployment
+
+The deployed application uses:
+
+```text
+Frontend → Vercel
+Backend  → Render
+Database → MongoDB Atlas
+```
+
+Frontend:
+
+https://skillbytes-quiz-delta.vercel.app/
+
+Backend:
+
+https://skillbytes-quiz-na42.onrender.com
+
+The React application includes SPA fallback routing so direct navigation and browser refreshes on client-side routes continue to work correctly.
+
+# Assignment Decisions / Assumptions
+
+### 1. "Four analytics APIs" vs three named metrics
+
+The assignment refers to "four analytics APIs", but explicitly describes only three:
+
+1. Learning Velocity Index
+2. Fatigue Analysis
+3. Question Difficulty Index
+
+No fourth metric is named elsewhere in the requirements.
+
+The implementation therefore follows the three explicitly specified metrics rather than inventing an undocumented fourth metric.
+
+### 2. Quiz session size
+
+A quiz samples up to 15 questions from the selected chapter.
+
+This matches the assignment's fatigue-analysis example of:
+
+```text
+1–5
+6–10
+11–15
+```
+
+### 3. Timestamp authority
+
+`shown_at` and `answered_at` are generated server-side.
+
+Therefore response time is measured from the server's perspective and includes network/request latency.
+
+This is preferable to trusting a client-provided duration.
+
+### 4. Quiz ID vs session ID
+
+The assignment refers to Quiz ID in its event-tracking requirements.
+
+Internally, the application treats a quiz as a stateful quiz session because the session contains:
+
+- selected question order
+- current position
+- progression state
+
+Therefore `quiz_session._id` acts as the quiz/session identifier.
+
+### 5. Cohort analytics access
+
+Cohort Analytics is available to logged-in users.
+
+The assignment defines comparative analytics but does not specify an administrator role.
+
+Introducing a separate admin authentication system would therefore add complexity without satisfying an explicit requirement.
+
+# What Is Deliberately Not Included
+
+This is an assessment project rather than a production SaaS platform.
+
+The implementation intentionally does not introduce:
+
+- Redis
+- Kafka
+- microservices
+- CQRS
+- WebSockets
+- background workers
+- production-grade authentication
+- role-based administration
+- ML-based analytics
+- runtime LLM calls
+- speculative database indexes
+- unnecessary CRUD abstraction
+
+The goal was to demonstrate sound full-stack engineering and analytical reasoning within the assignment's scope.
+
+# Verification
+
+A fresh environment can be verified with:
 
 ```bash
 cd backend
 pip install -r requirements.txt
 pytest -q
+```
 
+Then:
+
+```bash
 cd ../frontend
 npm install
 npm run build
 ```
 
-For an end-to-end run:
+For a full local environment:
 
 ```bash
 docker compose up --build
 docker compose exec backend python scripts/seed.py
 ```
 
-Then verify the browser flow: login -> My Progress -> Exam -> Subject ->
-Chapter -> Quiz -> Result -> My Progress -> Cohort Analytics.
+Recommended browser verification:
 
-## Loom walkthrough checklist
+```text
+Login
+  ↓
+My Progress
+  ↓
+Exam
+  ↓
+Subject
+  ↓
+Chapter
+  ↓
+Quiz
+  ↓
+Result
+  ↓
+My Progress
+  ↓
+Cohort Analytics
+```
 
-- [ ] Project structure walkthrough (this README's structure section)
-- [ ] Login -> My Progress, showing it's scoped to just this learner
-- [ ] Exam -> Subject -> Chapter -> Quiz -> Result, showing no-revisit and
-      real (non-placeholder) question content
-- [ ] Cohort Analytics: LVI leaderboard, fatigue browser, difficulty ranking
-- [ ] Log in as 2-3 of the seed script's printed "Demo users" and show
-      their My Progress charts look visibly different from each other
-- [ ] Database design + why (denormalized ancestry fields, reference vs.
-      embedding decision, index table)
-- [ ] Analytics implementation: pipelines.py (Mongo side) vs. formulas.py
-      (pure Python scoring), and the "How is this calculated?" panels
-- [ ] Assumptions section (especially #1 - the "four vs. three" discrepancy,
-      and #6/#7 - the login/analytics scoping decision)
+Also verify:
+
+- browser refresh on client-side routes
+- direct navigation to a nested route
+- opening another user's quiz session URL
+- attempting to submit an answer to another user's session
+- repeated refreshes of the current question
+- duplicate answer submission
+- completion and result retrieval
+- switching between different seeded users
+
+# Submission
+
+**Repository**
+
+https://github.com/Vikramaditya24/skillbytes_quiz
+
+**Frontend**
+
+https://skillbytes-quiz-delta.vercel.app/
+
+**Backend**
+
+https://skillbytes-quiz-na42.onrender.com
+
+**API documentation**
+
+`https://skillbytes-quiz-na42.onrender.com/docs`
+
+**Walkthrough**
+
+https://www.loom.com/share/8bc22a1a4eb94fa8ba846893a6150e30
+
+The implementation was developed against the supplied SkillBytes assignment requirements, with particular attention to server-side quiz enforcement, event-based analytics, explainable formulas, deterministic seed data, personal-vs-cohort analytics separation, and test coverage.
